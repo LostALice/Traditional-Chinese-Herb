@@ -1,0 +1,8 @@
+/.mypy_cache/
+/.venv/
+/.vscode/
+/images/
+/__pycache__/
+/image/*
+
+test.*
