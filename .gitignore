@@ -5,5 +5,8 @@
 /__pycache__/
 /image/*
 /model/*
+/static/uploads/*
 
 test.*
+*.png
+*.jpg
