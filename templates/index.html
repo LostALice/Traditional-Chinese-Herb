@@ -5,9 +5,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upload Image from Webcam</title>
-    <script src="https://cdn.tailwindcss.com"></script> <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         let videoStream;
+        let soup = new Set()
+
+        const HP_SOUP = {
+            Name: "黨蔘當歸杜仲枸杞湯",
+            Desc: "黨蔘當歸杜仲枸杞湯是一款補氣養血、強筋健骨的藥膳湯，非常適合需要日常養生的人士，特別是有氣血不足、腰膝痠痛等症狀者",
+            Func: "女性: 改善月經不調、氣血不足、面色萎黃等問題。 中老年人: 緩解腰膝痠痛、提升免疫力。 體虛者: 氣血不足、疲憊乏力、抵抗力下降的人群。",
+            Mate: new Set(["黨蔘", "當歸", "杜仲", "枸杞"])
+        }
+        const FOUR_SOUP = {
+            Name: "四物湯",
+            Desc: "黨蔘當歸川芎枸杞養血湯是一款具有補氣養血、活血調經的湯品。這款湯適合氣血不足、月經不調或需要日常調理氣血的人士",
+            Func: "氣血不足者: 面色蒼白、疲倦乏力、易感冒者。 女性: 月經不調、痛經、經量少的女性，特別適合飲用。 壓力大的人群: 改善血液循環，舒緩壓力引起的頭痛。",
+            Mate: new Set(["黨蔘", "當歸", "川芎", "枸杞"])
+        }
+        const MP_SOUP = {
+            Name: "當歸杜仲湯",
+            Desc: "當歸和杜仲的組合確實是一道經典的藥膳湯，特別適合女性飲用，既有補血養顏的作用，也能增強骨骼健康。",
+            Func: "補血活血:當歸有助於改善氣血不足，特別對女性月經不調、痛經有明顯效果。補肝腎，強筋骨:杜仲能增強腰膝筋骨力量，對於日常腰酸背痛或骨質疏鬆有幫助。美容養顏:魚湯含豐富的膠原蛋白，配合當歸的養血作用，對肌膚有滋養和改善的作用。潤腸通便:當歸潤腸作用可幫助改善腸燥便秘，特別適合體質偏乾燥的女性。",
+            Mate: new Set(["杜仲", "當歸"])
+        }
+        const TEA_SOUP = {
+            Name: "黨蔘枸杞養生湯",
+            Desc: "黨蔘枸杞養生湯是一款清淡滋補的養生湯，既補氣又養血，適合日常飲用，特別是氣血不足或體力透支時，效果非常溫和。",
+            Func: "日常養生: 適合需要溫補氣血的日常調理。 學生或上班族: 提神抗疲勞，改善工作學習中的壓力引起的疲勞。 中老年人: 幫助提升免疫力，緩解身體虛弱。",
+            Mate: new Set(["黨蔘", "枸杞"])
+        }
+        const WARM_SOUP = {
+            Name: "當歸川芎活血養生湯",
+            Desc: "當歸川芎活血養生湯是一款適合女性調經止痛、改善氣血循環，也可用於促進血液流通、緩解壓力引起的頭痛。",
+            Func: "女性: 月經不調、痛經或經量少者，經期後調理養血非常適合。 壓力大者: 頭痛、血液循環不良、氣色不佳者。 中老年人: 緩解血液循環不暢引起的肢體麻木或疼痛。",
+            Mate: new Set(["當歸", "川芎"])
+        }
 
         function startWebcam() {
             const video = document.getElementById("webcam");
@@ -29,7 +61,8 @@
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            return canvas.toDataURL("image/png");  // Convert to a data URL (base64)
+
+            return canvas.toDataURL("image/png");
         }
 
         function stopWebcam() {
@@ -54,7 +87,9 @@
                     document.getElementById("message").textContent = "檢測結果: " + response.predictions;
                     document.getElementById("uploadedImage").style.display = "block";
                     document.getElementById("uploadedImage").src = "./static/uploads/webcam_image.png?rand=" + Math.random();
-                    console.log(response);
+
+                    soup.add(response.predictions)
+                    checkSoupType()
                 } else {
                     document.getElementById("message").textContent = response.error;
                 }
@@ -72,31 +107,120 @@
             }
             return new Blob([ab], { type: mimeString });
         }
+
+        function checkSoupEqual(a, b) {
+            return a.size == b.size && a.size == a.union(b).size
+        }
+
+        function checkSoupType() {
+            const herbList = document.getElementById("herbList")
+            herbList.innerHTML = ""
+            for (const i of soup) (
+                herbList.insertAdjacentHTML(
+                    "beforeend",
+                    `<button \
+                        class= 'hover:bg-danger after:hover:content-["刪除"] my-1 w-full text-white bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2' \
+                        onclick='deleteHerb("${i}")' \
+                        type='button' title='cancel' > ${i} \
+                    </button>`
+                )
+            )
+            SoupName = document.getElementById("SoupName")
+            SoupFunction = document.getElementById("SoupFunction_")
+            SoupDescription = document.getElementById("SoupDescription")
+
+            if (checkSoupEqual(soup, HP_SOUP.Mate)) {
+                SoupName.innerHTML = HP_SOUP.Name
+                SoupDescription.innerHTML = HP_SOUP.Desc
+                SoupFunction.innerHTML = HP_SOUP.Func
+            }
+            else if (checkSoupEqual(soup, MP_SOUP.Mate)) {
+                SoupName.innerHTML = MP_SOUP.Name
+                SoupDescription.innerHTML = MP_SOUP.Desc
+                SoupFunction.innerHTML = MP_SOUP.Func
+            }
+            else if (checkSoupEqual(soup, TEA_SOUP.Mate)) {
+                SoupName.innerHTML = TEA_SOUP.Name
+                SoupDescription.innerHTML = TEA_SOUP.Desc
+                SoupFunction.innerHTML = TEA_SOUP.Func
+            }
+            else if (checkSoupEqual(soup, FOUR_SOUP.Mate)) {
+                SoupName.innerHTML = FOUR_SOUP.Name
+                SoupDescription.innerHTML = FOUR_SOUP.Desc
+                SoupFunction.innerHTML = FOUR_SOUP.Func
+            }
+            else if (checkSoupEqual(soup, WARM_SOUP.Mate)) {
+                SoupName.innerHTML = WARM_SOUP.Name
+                SoupDescription.innerHTML = WARM_SOUP.Desc
+                SoupFunction.innerHTML = WARM_SOUP.Func
+            }
+            else {
+                SoupName.innerHTML = "N/A"
+                SoupDescription.innerHTML = "N/A"
+                SoupFunction.innerHTML = "N/A"
+            }
+        }
+
+        function deleteHerb(herbName) {
+            soup.forEach((ingredient) => {
+                if (ingredient == herbName) {
+                    soup.delete(ingredient);
+                }
+            });
+            checkSoupType()
+        }
     </script>
 </head>
 
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
-    <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-lg">
-        <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">中藥材檢測出入記錄資料庫</h1>
+<body class="bg-gray-100 min-h-screen w-full flex items-center justify-center">
+    <div class="bg-white shadow-lg rounded-lg p-8 w-4/6 h-full flex justify-between gap-3">
+        <div class="w-full">
+            <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">中藥材湯品</h1>
 
-        <div class="flex justify-center mb-4">
-            <video id="webcam" class="rounded-lg border border-gray-300 shadow-sm" width="300" height="200"
-                autoplay></video>
+            <div class="flex justify-center mb-4">
+                <video id="webcam" class="rounded-lg border border-gray-300 shadow-sm" width="300" height="200"
+                    autoplay></video>
+            </div>
+
+            <div class="text-center">
+                <button onclick="uploadCapturedImage(event)"
+                    class="top-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded shadow">
+                    檢測
+                </button>
+            </div>
+
+            <p id="message" class="hidden text-center text-green-500 font-semibold mt-4"></p>
+
+            <div class="mt-6 text-center">
+                <img alt="captureImage" id="uploadedImage"
+                    class="hidden mx-auto rounded-lg border border-gray-300 shadow-sm" width="300" />
+            </div>
+        </div>
+        <div class="border border-gray-300 shadow-lg p-5 w-full rounded-lg bg-white">
+            <div id="herbList" class="mb-4">
+                <span class="block text-lg font-semibold text-gray-700 mb-3">已經檢測到的藥材</span>
+                <div class="flex flex-col space-y-2" id="herbList">
+                    <!-- <button
+                        class="w-full text-white bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 focus:ring-4 focus:ring-green-300 font-medium rounded-lg text-sm px-4 py-2"
+                        type="button" title="cancel">
+                        刪除
+                    </button> -->
+                </div>
+            </div>
+
+            <div class="bg-gray-100 p-4 rounded-lg">
+                <span class="text-sm text-gray-600 mb-1 font-bold">湯品名稱:</span>
+                <span id="SoupName" class="text-sm text-gray-600 mb-1"></span>
+                <br>
+                <span class="text-sm text-gray-600 mb-1 font-bold">湯品功效:</span>
+                <span id="SoupFunction_" class=" text-sm text-gray-600 mb-1"></span>
+                <br>
+                <span class="text-sm text-gray-500 font-bold">適合人群:</span>
+                <span id="SoupDescription" class=" text-sm text-gray-500"></span>
+            </div>
         </div>
 
-        <div class="text-center">
-            <button onclick="uploadCapturedImage(event)"
-                class="top-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded shadow">
-                檢測
-            </button>
-        </div>
 
-        <p id="message" class="hidden text-center text-green-500 font-semibold mt-4"></p>
-
-        <div class="mt-6 text-center">
-            <img alt="captureImage" id="uploadedImage"
-                class="hidden mx-auto rounded-lg border border-gray-300 shadow-sm" width="300" />
-        </div>
     </div>
 
     <script>

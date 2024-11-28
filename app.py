@@ -2,13 +2,25 @@
 
 from flask import Flask, request, jsonify, render_template
 from werkzeug.utils import secure_filename
-from herb_classifier import Classifier
+from herb_classifier import ChineseHerbClassificationModel
+from PIL import Image
 
 import os
+
 app = Flask(__name__)
 
 ALLOWED_EXTENSIONS = {"jpg", "jpg", "jpeg", "gif", "png"}
-CLASSIFIER = Classifier()
+CLASSIFIER = ChineseHerbClassificationModel()
+CLASSIFIER.load_model(path="./model/chinese_herb_classifier.pth")
+
+
+def predict_img(target_path: str = "./test/test.jpg") -> tuple[str, float]:
+    test_image = Image.open(target_path).convert("RGB")
+
+    result, idx = CLASSIFIER.classifier(test_image)
+    assert result, "None result in classifier"
+
+    return result, idx
 
 
 def allowed_file_(file_name):
@@ -36,15 +48,21 @@ def upload_file_():
 
         file_.save(os.path.join("./static/uploads", filename))
 
-        _, result = CLASSIFIER.predict_img(
-            model_path="./model/model.h5", target_path="./static/uploads/webcam_image.png")
+        result, idx = predict_img(
+            target_path="./static/uploads/webcam_image.png")
 
-        print(result)
+        table = {
+            "Angelica sinensis": "當歸",
+            "Chuanxiong": "川芎",
+            "Eucommia ulmoides": "杜仲",
+            "Ginseng": "黨蔘",
+            "Wolfberry": "枸杞",
+        }
 
         return jsonify({
             "success": "file successfully uploaded",
             "filename": filename,
-            "predictions": result
+            "predictions": table[result]
         }), 200
     else:
         return jsonify({"error": "file_ type not allowed"}), 400

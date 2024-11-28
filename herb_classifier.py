@@ -1,225 +1,228 @@
-# Code by AkinoAlice@Tyrant_Rex
-
+import os
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms, models
 from PIL import Image
 
-import matplotlib.pyplot as plt
-import tensorflow as tf
-import numpy as np
-import os
 
+class ChineseHerbDataset(Dataset):
+    """
+    Custom Dataset for loading Chinese herb images
+    """
 
-class Classifier(object):
-    def __init__(self) -> None:
-        ...
+    def __init__(self, root_dir, transform=None):
+        """
+        Args:
+            root_dir (string): Directory with all the herb images
+            transform (callable, optional): Optional transform to be applied on a sample
+        """
+        self.herb_images = []
+        self.herb_labels = []
+        self.class_to_idx = {}
 
-    def predict_img(
-        self,
-        model_path: str = "./models/model.h5",
-        target_path: str = "./test/image.jpg"
-    ) -> tuple[np.ndarray, str]:
+        # Build the dataset by scanning the directory
+        for i, herb_name in enumerate(os.listdir(root_dir)):
+            herb_path = os.path.join(root_dir, herb_name)
 
-        model = tf.keras.models.load_model(model_path)
-        self.class_names = ["Arecacatechu",
-                            "gastrodiaelata",
-                            "Ligusticum",
-                            "Liriope",
-                            "nuxvomica",
-                            "Pinelliaternate",
-                            "radixcurcumae",
-                            "None"]
+            # Ensure it's a directory
+            if os.path.isdir(herb_path):
+                self.class_to_idx[herb_name] = i
 
-        img = Image.open(target_path).convert("RGB").resize((224, 224))
-        img_array = np.array(img) / 255.0
+                # Collect image paths for this herb
+                for img_name in os.listdir(herb_path):
+                    img_path = os.path.join(herb_path, img_name)
+                    if img_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+                        self.herb_images.append(img_path)
+                        self.herb_labels.append(i)
 
-        if img_array.shape[-1] != 3:
-            img_array = np.stack([img_array] * 3, axis=-1)
-
-        img_array = np.expand_dims(img_array, axis=0)
-        outputs = model.predict(img_array)
-        # outputs = outputs if outputs else -1
-
-        result_index = np.argmax(outputs)
-        result = self.class_names[result_index]
-
-        return outputs, result
-
-
-class Dataset(object):
-    def __init__(self, dataset_path: str = "./image") -> None:
-        folders = os.listdir(dataset_path)
-        self.names = []
-        self.nums = []
-
-        for folder in folders:
-            folder_path = os.path.join(dataset_path, folder)
-            images = os.listdir(folder_path)
-            images_num = len(images)
-            print(f"{folder}:{images_num}")
-            self.names.append(folder)
-            self.nums.append(images_num)
-
-        self.data = (self.names, self.nums)
-
-    def show_graph(self) -> None:
-        x, y = self.data
-        plt.xlabel("num")
-        plt.plot(x, y)
-        plt.title("Num of medicinal materials")
-        plt.show()
-
-
-class Trainer(object):
-    def __init__(self) -> None:
-        ...
-
-    def load_data(
-        self,
-        data_dir: str = "./image",
-        img_height: int = 224,
-        img_width: int = 224,
-        batch_size: int = 4
-    ) -> tuple:
-
-        train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-            data_dir,
-            label_mode="categorical",
-            validation_split=0.2,
-            subset="training",
-            seed=123,
-            image_size=(img_height, img_width),
-            batch_size=batch_size)
-
-        val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-            data_dir,
-            label_mode="categorical",
-            validation_split=0.2,
-            subset="validation",
-            seed=123,
-            image_size=(img_height, img_width),
-            batch_size=batch_size)
-
-        class_names = train_ds.class_names
-
-        return train_ds, val_ds, class_names
-
-    def load_model(
-        self,
-        image_shape: tuple[int, int, int] = (224, 224, 3)
-    ) -> tf.keras.Model:
-
-        model = tf.keras.models.Sequential([
-            tf.keras.layers.Input(shape=image_shape),
-            tf.keras.layers.Conv2D(32, (3, 3), activation="relu"),
-            tf.keras.layers.MaxPooling2D(2, 2),
-            tf.keras.layers.Conv2D(64, (3, 3), activation="relu"),
-            tf.keras.layers.MaxPooling2D(2, 2),
-            tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(128, activation="relu"),
-            tf.keras.layers.Dense(7, activation="softmax")
+        self.transform = transform or transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
+                                 0.229, 0.224, 0.225])
         ])
 
-        model.summary()
-        model.compile(optimizer="adam",
-                      loss="categorical_crossentropy", metrics=["accuracy"])
-        return model
+    def __len__(self):
+        return len(self.herb_images)
 
-    def train(
-        self,
-        epochs: int = 10,
-        model_path: str = "./model/model.h5",
-        show_history: bool = False,
-        data_dir: str = "./image",
-        img_height: int = 224,
-        img_width: int = 224,
-        batch_size: int = 4
-    ) -> None:
+    def __getitem__(self, idx):
+        img_path = self.herb_images[idx]
+        image = Image.open(img_path).convert('RGB')
+        label = self.herb_labels[idx]
 
-        train_ds, val_ds, class_names = self.load_data(
-            data_dir=data_dir,
-            img_height=img_height,
-            img_width=img_width,
-            batch_size=batch_size
+        if self.transform:
+            image = self.transform(image)
+
+        return image, label
+
+
+class HerbClassifier(nn.Module):
+    """
+    Custom CNN for Chinese Herb Classification
+    """
+
+    def __init__(self, num_classes):
+        super(HerbClassifier, self).__init__()
+
+        # Use a pre-trained ResNet as feature extractor
+        self.feature_extractor = models.resnet50(pretrained=True)
+
+        # Freeze early layers
+        for param in self.feature_extractor.parameters():
+            param.requires_grad = False
+
+        # Replace the final fully connected layer
+        num_features = self.feature_extractor.fc.in_features
+        self.feature_extractor.fc = nn.Sequential(
+            nn.Linear(num_features, 512),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, num_classes)
         )
 
-        self.model = self.load_model()
-        self.history = self.model.fit(
-            train_ds, validation_data=val_ds, epochs=epochs)
+    def forward(self, x):
+        return self.feature_extractor(x)
 
-        if show_history:
-            self.show_loss_acc()
 
-        self.model.save(model_path)
+class ChineseHerbClassificationModel:
+    def __init__(self, image_dir: str = "./image"):
+        """
+        Initialize the classification model
 
-    def show_loss_acc(self) -> None:
-        acc = self.history.history["accuracy"]
-        val_acc = self.history.history["val_accuracy"]
+        Args:
+            image_dir (str): Directory containing herb subdirectories
+        """
+        # Prepare dataset and dataloader
+        self.dataset = ChineseHerbDataset(image_dir)
 
-        loss = self.history.history["loss"]
-        val_loss = self.history.history["val_loss"]
+        # Create mappings
+        self.idx_to_class = {v: k for k,
+                             v in self.dataset.class_to_idx.items()}
 
-        plt.figure(figsize=(8, 8))
-        plt.subplot(2, 1, 1)
-        plt.plot(acc, label="Training Accuracy")
-        plt.plot(val_acc, label="Validation Accuracy")
-        plt.legend(loc="lower right")
-        plt.ylabel("Accuracy")
-        plt.ylim([min(plt.ylim()), 1])
-        plt.title("Training and Validation Accuracy")
+        # Split dataset
+        train_size = int(0.8 * len(self.dataset))
+        val_size = len(self.dataset) - train_size
+        self.train_dataset, self.val_dataset = torch.utils.data.random_split(
+            self.dataset, [train_size, val_size]
+        )
 
-        plt.subplot(2, 1, 2)
-        plt.plot(loss, label="Training Loss")
-        plt.plot(val_loss, label="Validation Loss")
-        plt.legend(loc="upper right")
-        plt.ylabel("Cross Entropy")
-        plt.ylim([0, 1.0])
-        plt.title("Training and Validation Loss")
-        plt.xlabel("epoch")
-        plt.show()
+        self.train_loader = DataLoader(
+            self.train_dataset, batch_size=32, shuffle=True)
+        self.val_loader = DataLoader(
+            self.val_dataset, batch_size=32, shuffle=False)
 
-    def load_test_data(
-        self, test_data_path: str = "./test",
-        img_height: int = 224,
-        img_width: int = 224,
-        batch_size: int = 4
-    ) -> tuple:
+        # Initialize model
+        self.model = HerbClassifier(num_classes=len(self.dataset.class_to_idx))
 
-        train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-            test_data_path,
-            label_mode="categorical",
-            validation_split=0.2,
-            subset="training",
-            seed=123,
-            image_size=(img_height, img_width),
-            batch_size=batch_size)
+        # Loss and optimizer
+        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
 
-        val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-            test_data_path,
-            label_mode="categorical",
-            validation_split=0.2,
-            subset="validation",
-            seed=123,
-            image_size=(img_height, img_width),
-            batch_size=batch_size)
+    def train(self, epochs=10):
+        """
+        Train the Chinese herb classification model
 
-        class_names = train_ds.class_names
+        Args:
+            epochs (int): Number of training epochs
+        """
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(device)
 
-        return train_ds, val_ds, class_names
+        for epoch in range(epochs):
+            self.model.train()
+            train_loss = 0.0
 
-    def test(self, model_path: str = "./models/model.h5") -> None:
-        train_ds, val_ds, class_names = self.load_test_data(
-            "./Images/", 224, 224, 4)
-        model = tf.keras.models.load_model(model_path)
-        model.summary()
-        loss, accuracy = model.evaluate(val_ds)
-        print("Test accuracy :", accuracy, loss)
+            for images, labels in self.train_loader:
+                images, labels = images.to(device), labels.to(device)
+
+                self.optimizer.zero_grad()
+                outputs = self.model(images)
+                loss = self.criterion(outputs, labels)
+                loss.backward()
+                self.optimizer.step()
+
+                train_loss += loss.item()
+
+            # Validation
+            self.model.eval()
+            val_loss = 0.0
+            correct = 0
+            total = 0
+
+            with torch.no_grad():
+                for images, labels in self.val_loader:
+                    images, labels = images.to(device), labels.to(device)
+                    outputs = self.model(images)
+                    loss = self.criterion(outputs, labels)
+                    val_loss += loss.item()
+
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+
+            print(f"Epoch {epoch+1}: Train Loss {train_loss/len(self.train_loader)}, "
+                  f"Val Loss {val_loss/len(self.val_loader)}, "
+                  f"Accuracy {100 * correct / total}%")
+
+    def save_model(self, path='./model/chinese_herb_classifier.pth'):
+        """
+        Save the trained model
+        """
+        torch.save(self.model.state_dict(), path)
+
+    def load_model(self, path='chinese_herb_classifier.pth'):
+        """
+        Load a pre-trained model
+        """
+        self.model.load_state_dict(torch.load(path, weights_only=True))
+        self.model.eval()
+
+    def classifier(self, image: Image.Image) -> tuple[str, float]:
+        """
+        Predict the herb class for a given image
+
+        Args:
+            image (PIL.Image): Input herb image
+
+        Returns:
+            str: Predicted herb name
+        """
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
+                                 0.229, 0.224, 0.225])
+        ])
+
+        image_tensor = transform(image).unsqueeze(0)
+
+        # Predict
+        with torch.no_grad():
+            outputs = self.model(image_tensor)
+            _, predicted = torch.max(outputs.data, 1)
+
+        return self.idx_to_class[predicted.item()], predicted.item()
+
+    # def train():
+    #     # Initialize and train the model
+    #     herb_classifier = ChineseHerbClassificationModel('./image')
+    #     herb_classifier.train()
+
+    #     # Save the model
+    #     herb_classifier.save_model()
+
+    # def predict_img(self, model_path: str = "./model/chinese_herb_classifier.pth", target_path: str = "./test/test.jpg") -> str:
+    #     model = ChineseHerbClassificationModel("./image")
+    #     model.load_model(path=model_path)
+    #     test_image = Image.open(image_path)
+
+    #     result = model.classifier(test_image)
+    #     assert result, "None result in classifier"
+
+    #     return result
+
 
 if __name__ == "__main__":
-    # load dataset
-    data = Dataset(dataset_path="./image")
-
-    # train
-    Trainer().train(epochs=10, show_history=True)
-
-    # classify
-    predict, result = Classifier().predict_img(model_path="./model/model.h5", target_path="./test/image.jpg")
-    print(result)
+    ...
